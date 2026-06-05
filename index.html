@@ -1,0 +1,1644 @@
+import React, { useState, useEffect, useCallback } from “react”;
+
+function useIsMobile() {
+const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+useEffect(() => {
+const fn = () => setIsMobile(window.innerWidth < 768);
+window.addEventListener(“resize”, fn);
+return () => window.removeEventListener(“resize”, fn);
+}, []);
+return isMobile;
+}
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const INDUSTRIES = [
+“Technology / SaaS”,“Artificial Intelligence”,“Finance & Fintech”,
+“Healthcare & Wellness”,“Food & Beverage”,“Fashion & Apparel”,
+“Real Estate”,“Education & E-Learning”,“Gaming & Esports”,
+“Beauty & Cosmetics”,“Travel & Hospitality”,“Fitness & Sports”,
+“Legal & Consulting”,“Architecture & Interior”,“Music & Entertainment”,
+“Sustainability & Eco”,“Retail & E-Commerce”,“Media & Publishing”,
+“Automotive”,“Non-Profit / Social Impact”,
+];
+
+const BRAND_VALUES = [
+“Trustworthy”,“Innovative”,“Playful”,“Bold”,“Elegant”,“Minimal”,
+“Warm”,“Energetic”,“Premium”,“Friendly”,“Professional”,“Creative”,
+“Sustainable”,“Inclusive”,“Rebellious”,“Calm”,“Dynamic”,“Timeless”,
+];
+
+const LOGO_TYPES = [
+{ value: “Combination Mark”, icon: “◈A”, desc: “Icon + wordmark” },
+{ value: “Pictorial Mark”,   icon: “◉”,  desc: “Icon / symbol only” },
+{ value: “Wordmark”,         icon: “Aa”, desc: “Stylized brand name” },
+{ value: “Lettermark”,       icon: “AB”, desc: “Initials / monogram” },
+{ value: “Abstract Mark”,    icon: “◈”,  desc: “Geometric / non-literal” },
+{ value: “Emblem / Badge”,   icon: “🛡”, desc: “Icon inside badge/seal” },
+{ value: “Mascot Logo”,      icon: “🐾”, desc: “Character-based” },
+];
+
+const PLATFORMS = [
+{ id: “chatgpt”, name: “ChatGPT”,  sub: “DALL-E 3”,  color: “#10A37F”, icon: “✦” },
+{ id: “claude”,  name: “Claude”,   sub: “Anthropic”, color: “#CC785C”, icon: “◆” },
+{ id: “gemini”,  name: “Gemini”,   sub: “Google”,    color: “#4285F4”, icon: “✧” },
+{ id: “canva”,   name: “Canva AI”, sub: “Dream Lab”, color: “#7D2AE8”, icon: “⬡” },
+];
+
+const USE_CASES = [
+“App Icon”,“Website Header”,“Social Media”,“Packaging”,“Signage”,“Business Card”,“Merchandise”,
+];
+
+// ─── COLORS ───────────────────────────────────────────────────────────────────
+const C = {
+// Premium dark theme
+bg:          “#0F0F10”,
+card:        “#1A1A1C”,
+cardAlt:     “#161618”,
+border:      “#2A2A2E”,
+border2:     “#222226”,
+input:       “#111113”,
+inputBorder: “#303036”,
+
+text:    “#F2F2F2”,
+muted:   “#6E6E77”,
+subtle:  “#A0A0AB”,
+
+accent:  “#FF6B35”,
+accent2: “#FF3CAC”,
+
+p1: “#4C8EF7”,
+p2: “#B06EF5”,
+p3: “#FF6B35”,
+p4: “#3DD68C”,
+
+selected:       “rgba(76,142,247,0.12)”,
+selectedBorder: “#4C8EF7”,
+};
+
+const labelStyle = {
+display: “block”, fontSize: “12px”, fontWeight: “600”,
+color: C.muted, letterSpacing: “0.02em”,
+textTransform: “none”, marginBottom: “8px”,
+};
+
+// ─── PROMPT BUILDERS ──────────────────────────────────────────────────────────
+
+// fidelity: 1=very close, 5=freely inspired
+function buildAnalyzerPrompt(brand, userDirection, fidelity) {
+const brandStr    = brand.name     ? `The brand is called "${brand.name}".` : “”;
+const industryStr = brand.industry ? `It operates in the ${brand.industry} space.` : “”;
+const briefStr    = brand.brief    ? `Business description: "${brand.brief}".` : “”;
+const brandContext = [brandStr, industryStr, briefStr].filter(Boolean).join(” “);
+
+const dirBlock = userDirection?.trim()
+? `\nThe owner has provided this personal direction (in their own words — honor it precisely):\n"${userDirection}"\n`
+: “”;
+
+// Fidelity 1-2: structural preservation focus
+// Fidelity 3: balanced
+// Fidelity 4-5: creative DNA / inspired
+const isClose = fidelity <= 2;
+const isFree  = fidelity >= 4;
+
+const priorityBlock = isClose
+? `CRITICAL INSTRUCTION: Do NOT prioritize brand meaning or semantic interpretation. Your primary job is visual structure documentation. The goal is to preserve ~${fidelity === 1 ? "95" : "85"}% of the reference — only the subject matter will be swapped.\n\nPriority order:\n1. Visual DNA extraction (highest)\n2. Structural preservation\n3. User instruction\n4. Brand adaptation (lowest — do NOT redesign the visual system)`
+: isFree
+? `INSTRUCTION: Extract the visual DNA and use it as creative inspiration. The new logo should feel like it belongs to the same visual family but is an original concept — not a close replica.\n\nPriority order:\n1. Visual DNA extraction\n2. User instruction\n3. Brand adaptation\n4. New concept generation`
+: `INSTRUCTION: Balance preservation and originality. Carry over the core visual language and energy, but allow moderate creative interpretation for the new brand context.\n\nPriority order:\n1. Visual DNA extraction\n2. User instruction\n3. Balanced adaptation\n4. Brand-appropriate evolution`;
+
+const preserveField = isClose
+? `PRESERVE_EXACTLY: [exhaustive list of every visual element, technique, and structural choice that MUST be carried over unchanged — stroke weight, contour style, composition logic, illustration approach, emotional register, decorative elements]`
+: `CARRY_OVER: [the specific visual qualities, techniques, and energy that the new logo should inherit from the reference]`;
+
+const changeField = isClose
+? `REPLACE_ONLY: [list ONLY the specific subject matter to swap — be minimal, no systemic changes]\nELEMENT_SWAP: [for each replaced element, specify the exact new visual element for this brand — describe visually, not conceptually]`
+: `CHANGE: [what should be different — subject matter, any style shifts, complexity changes]`;
+
+return `You are a senior brand identity designer with expertise in visual analysis. I will attach a visual reference image.
+
+${brandContext}${dirBlock}
+${priorityBlock}
+
+Analyze the attached image and respond ONLY in this exact format:
+
+STROKE: [line weight, edge quality, consistency — thick/thin, sharp/rounded, hand-drawn/precise, rough/smooth]
+CONTOUR: [contour style — rounded/angular, organic/geometric, how curves and edges behave]
+COMPOSITION: [exact spatial arrangement — main subject position, how supporting elements are placed, visual flow and rhythm]
+DENSITY: [visual weight — empty vs filled space, how airy or packed it feels]
+ILLUSTRATION_LANGUAGE: [overall drawing style and what makes it distinctively itself — doodle, sketch, ink, vector, etc.]
+MOOD: [the emotional quality it evokes — warmth, energy, tone — not brand meaning]
+${preserveField}
+${changeField}
+DIRECTION_TRANSLATION: [translate the owner’s personal direction above into professional design language — if none given, write “N/A”]
+ICON_SUGGESTION: [suggest 1 specific, non-generic icon concept for this brand that fits naturally into the visual structure — describe it as a visual composition, not a brand concept. Be precise and visual, not abstract]`;
+}
+
+function buildLogoPrompt(state) {
+const { brand, fidelity, dna, logoType, values, iconConcept, useCases, platform, whiteBg, flatLayout, selectedColors, renderStyle, renderToggles } = state;
+
+const brandStr    = brand.name     ? `for the brand "${brand.name}" ` : “”;
+const industryStr = brand.industry || “general brand”;
+const briefStr    = brand.brief    ? ` Business context: ${brand.brief}.` : “”;
+const valuesStr   = values.length  ? values.join(”, “) : “distinctive and memorable”;
+const useCaseStr  = useCases.length ? useCases.join(”, “) : “general brand use”;
+const logoTypeStr = logoType       || “combination mark”;
+const isClose     = fidelity <= 2;
+const isFree      = fidelity >= 4;
+
+// Render style block
+const allStyles = RENDER_CATEGORIES.flatMap(c => c.styles);
+const activeStyle = allStyles.find(s => s.id === renderStyle);
+const activeToggles = (renderToggles || []).map(tid => RENDER_DETAIL_TOGGLES.find(t => t.id === tid)).filter(Boolean);
+
+let renderBlock = “”;
+if (activeStyle || activeToggles.length > 0) {
+const stylePart = activeStyle ? `[RENDERING STYLE]\n${activeStyle.prompt}\n` : “”;
+const bgOverride = activeStyle?.bgOverride ? `Background: ${activeStyle.bgOverride}.\n` : “”;
+const togglePart = activeToggles.length > 0 ? `[RENDERING DETAILS]\n${activeToggles.map(t => t.prompt).join("\n")}\n` : “”;
+renderBlock = `\n${stylePart}${bgOverride}${togglePart}`;
+}
+
+// If render style overrides bg, respect that
+const effectiveBgStr = activeStyle?.bgOverride
+? `Background: ${activeStyle.bgOverride}.`
+: whiteBg ? “Solid white background (#FFFFFF). No shadows, gradient bleeds, or vignettes.” : “Neutral background appropriate to the style.”;
+
+// Color palette block
+const colorBlock = selectedColors?.length > 0
+? `\n[COLOR PALETTE — STRICT]\nUse ONLY these exact colors extracted from the brand's color reference: ${selectedColors.join(", ")}.\nDo not introduce any color not in this list. Apply them purposefully: consider which is dominant, which is accent, which is background.\n`
+: “”;
+
+const layoutStr = flatLayout ? “Strict 2D flat: centered, no perspective, no 3D depth, no product mockups.” : “Appropriate composition for the logo type.”;
+const exclusions = `\n[HARD EXCLUSIONS]\nNo random text artifacts, no gibberish letterforms, no watermarks, no photorealistic textures, no stock clip-art, no generic AI shapes, no product mockup environments.`;
+
+let prefix = “”, suffix = “”;
+if (platform === “chatgpt”) {
+prefix = `You are a senior brand identity designer. Generate a logo using DALL-E 3. Follow every instruction precisely.\n\n`;
+suffix = `\nOutput: single high-quality image only. No commentary.`;
+} else if (platform === “claude”) {
+prefix = `Please generate a professional logo image following this design brief exactly:\n\n`;
+suffix = `\nGenerate the logo image directly.`;
+} else if (platform === “gemini”) {
+prefix = `Generate a logo image using this professional design brief. Apply every parameter precisely:\n\n`;
+suffix = `\nOutput: single square 1:1 image, logo only.`;
+} else if (platform === “canva”) {
+const parts = [
+logoTypeStr, `${industryStr} brand`, valuesStr, iconConcept || “”,
+dna.stroke ? `style: ${dna.stroke}` : “”,
+dna.illustrationLanguage || “”,
+whiteBg ? “white background” : “”,
+“flat vector, centered, 1:1 square, no text artifacts”,
+].filter(Boolean).join(”, “);
+return `${brand.name ? `Brand: ${brand.name}. ` : ""}${parts}`;
+}
+
+// Build DNA/preservation block based on fidelity
+const hasDNA = dna.preserveExactly || dna.carryOver || dna.stroke;
+
+let refBlock = “”;
+if (hasDNA) {
+if (isClose) {
+const preserveLines = [
+dna.stroke             && `• Stroke/line: ${dna.stroke}`,
+dna.contour            && `• Contour: ${dna.contour}`,
+dna.composition        && `• Composition: ${dna.composition}`,
+dna.density            && `• Visual density: ${dna.density}`,
+dna.illustrationLanguage && `• Illustration language: ${dna.illustrationLanguage}`,
+dna.mood               && `• Emotional tone: ${dna.mood}`,
+dna.preserveExactly    && `• Must preserve: ${dna.preserveExactly}`,
+].filter(Boolean).join(”\n”);
+
+```
+  const swapLines = [
+    dna.replaceOnly && `Replace only: ${dna.replaceOnly}`,
+    dna.elementSwap && `Specific swaps: ${dna.elementSwap}`,
+  ].filter(Boolean).join("\n");
+
+  refBlock = `[DESIGN MODE: STRUCTURAL PRESERVATION — FIDELITY ${fidelity}/5]
+```
+
+This is a “find and replace” — NOT a redesign. Preserve the visual structure of the reference as closely as possible. Only the specified subject matter changes. Everything else stays.
+
+[STRUCTURAL BLUEPRINT — REPLICATE EXACTLY]
+${preserveLines}
+
+${swapLines ? `[ELEMENT SWAPS — THE ONLY CHANGES ALLOWED]\n${swapLines}\n` : “”}${dna.directionTranslation && dna.directionTranslation !== “N/A” ? `[OWNER DIRECTION — HIGHEST PRIORITY]\n${dna.directionTranslation}\n` : “”}${renderBlock}\n`; } else { const dnaLines = [ dna.stroke             && `• Stroke/line: ${dna.stroke}`, dna.contour            && `• Contour: ${dna.contour}`, dna.composition        && `• Composition: ${dna.composition}`, dna.illustrationLanguage && `• Illustration language: ${dna.illustrationLanguage}`, dna.mood               && `• Mood: ${dna.mood}`, dna.carryOver          && `• Carry over: ${dna.carryOver}`, dna.change             && `• Change: ${dna.change}`,
+].filter(Boolean).join(”\n”);
+
+```
+  refBlock = `[VISUAL DNA — CREATIVE FOUNDATION — FIDELITY ${fidelity}/5]
+```
+
+Use this as your style foundation. Inherit the energy and visual language. Generate an original concept within this style family — ${isFree ? “significant creative freedom is allowed” : “stay reasonably close to the reference’s visual spirit”}.\n\n${dnaLines}\n\n${dna.directionTranslation && dna.directionTranslation !== “N/A” ? `[OWNER DIRECTION]\n${dna.directionTranslation}\nHonor this above all else.\n\n` : “”}${renderBlock}`;
+}
+}
+
+const conceptBlock = iconConcept
+? `[ICON CONCEPT]\n"${iconConcept}"\n${isClose ? "Draw this using the exact illustration language and compositional logic above. Do not change the visual system — only what's inside it." : "Build the mark around this concept using the visual DNA above as your style guide."}\n\n`
+: `[ICON CONCEPT]\nNo specific concept. Generate the most distinctive, non-generic interpretation for a ${logoTypeStr} in the ${industryStr} space.\n\n`;
+
+return `${prefix}${refBlock}${conceptBlock}[CORE TASK]\nCreate a professional ${logoTypeStr} logo ${brandStr}in the ${industryStr} space.${briefStr}\nBrand values: ${valuesStr}.\n${colorBlock}${!hasDNA ? renderBlock : ""} [TECHNICAL]\n${effectiveBgStr}\n${layoutStr}\nSquare 1:1 format. Intended use: ${useCaseStr}.${exclusions}${suffix}`;
+}
+
+function buildMeaning(state) {
+const { brand, fidelity, dna, logoType, values, iconConcept, selectedColors, renderStyle, renderToggles } = state;
+const allStyles = RENDER_CATEGORIES.flatMap(c => c.styles);
+const activeStyleMeaning = allStyles.find(s => s.id === renderStyle);
+const lines = [];
+const isClose = fidelity <= 2;
+const sliderColor = getFidelityColor(fidelity);
+
+const modeLabel = fidelity === 1 ? “Maximum Preservation (95%)” : fidelity === 2 ? “High Preservation (85%)” : fidelity === 3 ? “Balanced (carry style, adapt concept)” : fidelity === 4 ? “Inspired (same family, new concept)” : “Freely Inspired (style cue only)”;
+lines.push({ color: sliderColor, label: `⚡ Reference Fidelity: ${modeLabel}`, text: isClose ? “AI is instructed to preserve the reference’s visual structure closely. Only subject matter and brand-specific elements will be swapped — not a redesign.” : fidelity === 3 ? “AI will carry over the core visual language and energy while allowing moderate creative adaptation.” : “AI will use the reference as style inspiration and generate an original concept within that visual family.” });
+
+if (isClose) {
+if (dna.preserveExactly) lines.push({ color: sliderColor, label: “✓ Preserved Exactly”, text: dna.preserveExactly });
+if (dna.replaceOnly)     lines.push({ color: “#FF6B6B”,   label: “↔ Replace Only”,      text: dna.replaceOnly });
+if (dna.elementSwap)     lines.push({ color: “#FF9E6B”,   label: “🔁 Element Swaps”,    text: dna.elementSwap });
+} else {
+if (dna.carryOver)       lines.push({ color: sliderColor, label: “🧬 Carry Over”,        text: dna.carryOver });
+if (dna.change)          lines.push({ color: “#FF9E6B”,   label: “✦ Change”,             text: dna.change });
+}
+if (dna.directionTranslation && dna.directionTranslation !== “N/A”)
+lines.push({ color: C.p2, label: “🗣 Direction Translated”, text: dna.directionTranslation });
+if (activeStyleMeaning)
+lines.push({ color: activeStyleMeaning.color, label: `🎨 Rendering Style: ${activeStyleMeaning.name}`, text: `${activeStyleMeaning.desc}. ${activeStyleMeaning.prompt.split(".")[0]}.` });
+if (renderToggles?.length > 0)
+lines.push({ color: C.accent, label: “⚙ Detail Enhancements”, text: renderToggles.map(tid => RENDER_DETAIL_TOGGLES.find(t => t.id === tid)?.label).filter(Boolean).join(”, “) });
+if (selectedColors?.length > 0)
+lines.push({ color: “#EC4899”, label: “🎨 Color Palette”, text: `Using these extracted colors: ${selectedColors.join(", ")}` });
+if (iconConcept)
+lines.push({ color: C.accent, label: “🎯 Icon Concept”, text: `"${iconConcept}"` });
+if (values.length)
+lines.push({ color: C.subtle, label: “💬 Brand Values”, text: values.join(”, “) });
+if (logoType)
+lines.push({ color: C.subtle, label: “🏗 Logo Type”, text:
+logoType === “Combination Mark” ? “Icon + wordmark — works independently too.” :
+logoType === “Pictorial Mark”   ? “Single icon — must read at favicon size.” :
+logoType === “Wordmark”         ? “Typography as identity.” :
+logoType === “Lettermark”       ? “Compact initials monogram.” :
+logoType === “Abstract Mark”    ? “Geometric form communicates values through shape.” :
+logoType === “Emblem / Badge”   ? “Contained badge — great for merchandise.” :
+logoType === “Mascot Logo”      ? “Character-based identity.” : “”
+});
+return lines.filter(l => l.text);
+}
+
+// ─── UI COMPONENTS ────────────────────────────────────────────────────────────
+function Card({ children, style, accent }) {
+return (
+<div style={{
+background: C.card,
+border: `1px solid ${accent ? accent + "20" : C.border}`,
+borderRadius: “20px”, padding: “28px 24px”,
+boxShadow: “0 2px 8px rgba(0,0,0,0.04)”,
+…style,
+}}>{children}</div>
+);
+}
+
+function StepHeader({ number, color, title, subtitle, done }) {
+return (
+<div style={{ display: “flex”, alignItems: “center”, gap: “12px”, marginBottom: “24px” }}>
+<div style={{
+width: “34px”, height: “34px”, borderRadius: “10px”, flexShrink: 0,
+background: done ? C.p4 : `${color}15`,
+border: `1.5px solid ${done ? C.p4 : color + "40"}`,
+display: “flex”, alignItems: “center”, justifyContent: “center”,
+fontSize: “14px”, fontWeight: “700”, color: done ? “#fff” : color,
+transition: “all 0.3s”,
+}}>{done ? “✓” : number}</div>
+<div style={{ flex: 1, minWidth: 0 }}>
+<h2 style={{ margin: 0, fontSize: “17px”, fontWeight: “600”, color: C.text, letterSpacing: “-0.02em” }}>{title}</h2>
+<p style={{ margin: “2px 0 0”, fontSize: “13px”, color: C.muted }}>{subtitle}</p>
+</div>
+{done && (
+<span style={{ fontSize: “12px”, fontWeight: “600”, color: C.p4, background: `${C.p4}12`, padding: “4px 12px”, borderRadius: “20px”, flexShrink: 0 }}>Done</span>
+)}
+</div>
+);
+}
+
+function TextInput({ placeholder, value, onChange, multiline, rows = 3 }) {
+const base = {
+width: “100%”, boxSizing: “border-box”, padding: “12px 16px”,
+borderRadius: “12px”, background: C.input,
+border: `1px solid ${C.inputBorder}`,
+color: C.text, fontSize: “14px”, outline: “none”,
+transition: “border-color 0.15s, box-shadow 0.15s”,
+fontFamily: “inherit”, WebkitAppearance: “none”,
+};
+const ev = {
+onFocus: e => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = `0 0 0 3px ${C.accent}20`; },
+onBlur:  e => { e.target.style.borderColor = C.inputBorder; e.target.style.boxShadow = “none”; },
+};
+return multiline
+? <textarea placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} rows={rows} {…ev} style={{ …base, resize: “vertical”, lineHeight: “1.6” }} />
+: <input type=“text” placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} {…ev} style={base} />;
+}
+
+function SelectField({ value, options, onChange, placeholder }) {
+return (
+<select value={value} onChange={e => onChange(e.target.value)} style={{
+width: “100%”, padding: “12px 40px 12px 16px”, borderRadius: “12px”,
+background: C.input, border: `1px solid ${C.inputBorder}`,
+color: value ? C.text : C.muted, fontSize: “14px”, outline: “none”,
+cursor: “pointer”, appearance: “none”, WebkitAppearance: “none”,
+backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2386868B' d='M5 6L0 0h10z'/%3E%3C/svg%3E")`,
+backgroundRepeat: “no-repeat”, backgroundPosition: “right 16px center”,
+fontFamily: “inherit”, boxSizing: “border-box”,
+transition: “border-color 0.15s”,
+}}>
+<option value="">{placeholder}</option>
+{options.map(o => <option key={o} value={o}>{o}</option>)}
+</select>
+);
+}
+
+function ValueChips({ selected, onChange }) {
+return (
+<div style={{ display: “flex”, flexWrap: “wrap”, gap: “8px” }}>
+{BRAND_VALUES.map(v => {
+const sel = selected.includes(v);
+return (
+<button key={v} onClick={() => onChange(sel ? selected.filter(x => x !== v) : selected.length < 4 ? […selected, v] : selected)}
+style={{
+padding: “8px 16px”, borderRadius: “20px”, cursor: “pointer”,
+fontSize: “14px”, fontWeight: “500”, transition: “all 0.15s”,
+background: sel ? C.accent : C.input,
+border: `1px solid ${sel ? C.accent : C.inputBorder}`,
+color: sel ? “#fff” : C.subtle,
+opacity: !sel && selected.length >= 4 ? 0.4 : 1,
+}}>{v}</button>
+);
+})}
+</div>
+);
+}
+
+function Checkbox({ checked, onChange, label: lbl, sublabel }) {
+return (
+<div onClick={() => onChange(!checked)} style={{
+display: “flex”, alignItems: “flex-start”, gap: “12px”,
+padding: “14px 16px”, borderRadius: “12px”, cursor: “pointer”,
+background: checked ? “rgba(255,107,53,0.08)” : C.input,
+border: `1px solid ${checked ? "rgba(255,107,53,0.4)" : C.inputBorder}`,
+transition: “all 0.15s”, marginBottom: “8px”, userSelect: “none”,
+}}>
+<div style={{
+width: “20px”, height: “20px”, borderRadius: “6px”, flexShrink: 0, marginTop: “1px”,
+background: checked ? C.accent : C.input,
+border: `1.5px solid ${checked ? C.accent : C.inputBorder}`,
+display: “flex”, alignItems: “center”, justifyContent: “center”, transition: “all 0.15s”,
+}}>
+{checked && <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4.5L4 7.5L10 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+</div>
+<div>
+<div style={{ fontSize: “14px”, fontWeight: “500”, color: C.text }}>{lbl}</div>
+{sublabel && <div style={{ fontSize: “12px”, color: C.muted, marginTop: “3px”, lineHeight: “1.5” }}>{sublabel}</div>}
+</div>
+</div>
+);
+}
+
+function CopyButton({ text, label = “Copy”, size = “normal”, color = C.accent }) {
+const [copied, setCopied] = useState(false);
+return (
+<button onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2200); }); }}
+style={{
+padding: size === “large” ? “13px 24px” : “9px 16px”,
+borderRadius: “10px”, cursor: “pointer”, border: “none”,
+fontWeight: “600”, fontSize: size === “large” ? “15px” : “13px”,
+background: copied ? C.p4 : C.text,
+color: “#fff”, display: “flex”, alignItems: “center”, gap: “6px”,
+whiteSpace: “nowrap”, transition: “all 0.2s”, flexShrink: 0,
+letterSpacing: “-0.01em”,
+}}>
+{copied ? “✓ Copied” : label}
+</button>
+);
+}
+
+function PromptBox({ value, minHeight = “160px” }) {
+return (
+<textarea readOnly value={value} style={{
+width: “100%”, minHeight, padding: “16px”,
+background: C.input, borderRadius: “12px”,
+border: `1px solid ${C.border}`, color: C.subtle,
+fontSize: “12.5px”, lineHeight: “1.85”, resize: “vertical”,
+fontFamily: “‘DM Sans’, sans-serif”, outline: “none”, boxSizing: “border-box”,
+}} />
+);
+}
+
+function Divider({ label }) {
+return (
+<div style={{ display: “flex”, alignItems: “center”, gap: “12px”, margin: “20px 0” }}>
+<div style={{ flex: 1, height: “1px”, background: C.border }} />
+{label && <span style={{ fontSize: “12px”, color: C.muted, whiteSpace: “nowrap” }}>{label}</span>}
+<div style={{ flex: 1, height: “1px”, background: C.border }} />
+</div>
+);
+}
+
+function getFidelityColor(f) {
+if (f <= 1) return “#10A37F”;
+if (f <= 2) return “#22C55E”;
+if (f === 3) return “#F59E0B”;
+if (f === 4) return “#A855F7”;
+return “#EC4899”;
+}
+
+const FIDELITY_LABELS = [
+{ short: “Very Close”,   long: “~95% preserved — only subject swapped”,     tip: “Keep almost everything. Only the main subject will change.” },
+{ short: “Close”,        long: “~85% preserved — minor adaptations”,         tip: “Very faithful to reference with small brand adaptations.” },
+{ short: “Balanced”,     long: “Core style preserved, concept adapted”,       tip: “Carry the visual language, allow moderate creative freedom.” },
+{ short: “Inspired”,     long: “Same visual family, original concept”,        tip: “Reference as mood/style guide. New concept for the brand.” },
+{ short: “Freely Inspired”, long: “Style cue only — maximum creativity”,     tip: “Only the aesthetic energy is borrowed. Fully original design.” },
+];
+
+function FidelitySlider({ value, onChange }) {
+const label = FIDELITY_LABELS[value - 1];
+const color = getFidelityColor(value);
+const pct   = ((value - 1) / 4) * 100;
+
+return (
+<div>
+{/* Track */}
+<div style={{ position: “relative”, height: “40px”, display: “flex”, alignItems: “center”, marginBottom: “6px” }}>
+<div style={{ position: “absolute”, left: 0, right: 0, height: “5px”, borderRadius: “3px”, background: C.inputBorder }} />
+<div style={{ position: “absolute”, left: 0, width: `${pct}%`, height: “5px”, borderRadius: “3px”, background: `linear-gradient(90deg, ${C.p4}, ${color})`, transition: “width 0.2s, background 0.2s”, pointerEvents: “none” }} />
+<input type=“range” min=“1” max=“5” step=“1” value={value}
+onChange={e => onChange(Number(e.target.value))}
+style={{ position: “relative”, zIndex: 2, width: “100%”, cursor: “pointer”, appearance: “none”, background: “transparent”, outline: “none”, height: “40px” }}
+/>
+</div>
+{/* Labels row */}
+<div style={{ display: “flex”, justifyContent: “space-between”, marginBottom: “10px” }}>
+<span style={{ fontSize: “10px”, color: C.muted }}>Very Close</span>
+<span style={{ fontSize: “10px”, color: C.muted }}>Freely Inspired</span>
+</div>
+{/* Selected state pill */}
+<div style={{ padding: “12px 16px”, borderRadius: “12px”, background: `${color}10`, border: `1px solid ${color}30`, transition: “all 0.2s” }}>
+<div style={{ fontSize: “13px”, fontWeight: “600”, color, marginBottom: “4px” }}>{value}/5 — {label.short}</div>
+<div style={{ fontSize: “12px”, color: C.muted, lineHeight: “1.5” }}>{label.tip}</div>
+</div>
+</div>
+);
+}
+
+// Shown after DNA parse — close fidelity (1-2) shows preserve/swap fields; others show carry/change
+const DNA_FIELDS_CLOSE = [
+{ key: “preserveExactly”,    label: “Preserve Exactly”,     wide: true,  color: “#22C55E”, placeholder: ‘Everything that MUST stay the same — stroke style, contour, composition, density, illustration language, decorative elements…’ },
+{ key: “replaceOnly”,        label: “Replace Only”,         wide: false, color: “#FF6B6B”, placeholder: ‘Only the subject matter to swap — e.g. “abstract creature → simplified human figure”’ },
+{ key: “elementSwap”,        label: “Element Swaps”,        wide: true,  color: “#FF9E6B”, placeholder: ‘Specific swap mapping — e.g. “animal body → floating human; abstract blob → drifting figure”’ },
+{ key: “stroke”,             label: “Stroke”,               wide: false, color: C.subtle,  placeholder: ‘e.g. “thick, variable, hand-drawn rough”’ },
+{ key: “composition”,        label: “Composition”,          wide: false, color: C.subtle,  placeholder: ‘e.g. “single centered subject, scattered small elements”’ },
+{ key: “illustrationLanguage”, label: “Illustration Language”, wide: false, color: C.subtle, placeholder: ‘e.g. “indie doodle, sketchbook ink quality”’ },
+{ key: “directionTranslation”, label: “Your Direction (Translated)”, wide: true, color: C.p2, placeholder: “AI’s translation of your direction…” },
+];
+
+const DNA_FIELDS_FREE = [
+{ key: “stroke”,             label: “Stroke / Line Style”,  wide: false, color: C.subtle,  placeholder: ‘e.g. “thick, rounded, hand-drawn organic”’ },
+{ key: “composition”,        label: “Composition”,          wide: false, color: C.subtle,  placeholder: ‘e.g. “centered, floating elements, airy”’ },
+{ key: “mood”,               label: “Mood / Energy”,        wide: false, color: C.subtle,  placeholder: ‘e.g. “warm, approachable, indie”’ },
+{ key: “illustrationLanguage”, label: “Illustration Language”, wide: false, color: C.subtle, placeholder: ‘e.g. “indie doodle, sketchbook, ink”’ },
+{ key: “carryOver”,          label: “Carry Over”,           wide: false, color: “#22C55E”,  placeholder: ‘e.g. “line weight, rounded corners, scatter”’ },
+{ key: “change”,             label: “Change”,               wide: false, color: “#FF6B6B”,  placeholder: ‘e.g. “subject matter, color, complexity”’ },
+{ key: “directionTranslation”, label: “Your Direction (Translated)”, wide: true, color: C.p2, placeholder: “AI’s translation of your direction…” },
+];
+
+// ─── RENDER STYLES ───────────────────────────────────────────────────────────
+const RENDER_CATEGORIES = [
+{
+label: “Hand-Crafted”,
+styles: [
+{
+id: “handdrawn”,
+icon: “✏️”,
+name: “Hand-Drawn Ink”,
+desc: “Organic, sketch-like”,
+color: “#C4923A”,
+prompt: “Hand-drawn ink illustration style. Organic, slightly imperfect lines with natural weight variation. Feels like it was drawn with a brush pen or fine liner on paper. No perfect symmetry — embrace the human imperfection.”,
+bgOverride: “warm off-white cream (#F5F0E8 tone), like aged sketchbook paper — NOT pure white”,
+},
+{
+id: “risograph”,
+icon: “🖨”,
+name: “Risograph”,
+desc: “Indie zine, misregistered”,
+color: “#E05A3A”,
+prompt: “Risograph print aesthetic. Slightly misregistered color layers, visible grain and ink texture, limited flat color palette. Feels like it was printed on a RISO machine — indie zine quality, organic and tactile.”,
+bgOverride: null,
+},
+{
+id: “screenprint”,
+icon: “🎨”,
+name: “Screen Print”,
+desc: “Bold, flat, stamp-like”,
+color: “#D97706”,
+prompt: “Screen print / silk screen style. Bold flat color areas, slight ink texture and halftone grain, slight stamp imperfection at edges. Feels like a limited-edition printed poster or apparel graphic.”,
+bgOverride: null,
+},
+{
+id: “linocut”,
+icon: “🔪”,
+name: “Linocut”,
+desc: “Carved, high contrast”,
+color: “#7C3AED”,
+prompt: “Linocut / relief print style. Bold carved-looking lines, high contrast black and white or limited palette, organic edge texture as if cut from linoleum. Strong graphic quality with visible tool marks.”,
+bgOverride: null,
+},
+{
+id: “letterpress”,
+icon: “📜”,
+name: “Letterpress”,
+desc: “Embossed, premium ink”,
+color: “#059669”,
+prompt: “Letterpress print style. Deep ink impression feel, slight deboss/emboss quality, rich ink density, premium tactile appearance. Think high-end stationery or artisan book printing.”,
+bgOverride: null,
+},
+{
+id: “woodcut”,
+icon: “🪵”,
+name: “Woodcut / Etching”,
+desc: “Rough carved lines”,
+color: “#92400E”,
+prompt: “Woodcut or etching style. Rough carved lines, cross-hatching for depth, visible grain texture, high contrast. Bold graphic marks that feel like they were hand-carved into wood or etched into metal.”,
+bgOverride: null,
+},
+],
+},
+{
+label: “Material & Finish”,
+styles: [
+{
+id: “foilstamp”,
+icon: “✨”,
+name: “Foil Stamp”,
+desc: “Gold/silver metallic”,
+color: “#B7973A”,
+prompt: “Foil stamp / hot foil effect. Metallic gold or silver surface, embossed dimensional quality, luxury printed feel as if on dark premium card stock. High contrast between foil and background.”,
+bgOverride: “deep dark background — navy, charcoal, or black — to maximize foil contrast”,
+},
+{
+id: “mattepremium”,
+icon: “◼”,
+name: “Matte Premium”,
+desc: “Luxury flat, editorial”,
+color: “#374151”,
+prompt: “Ultra-premium matte finish. Flat, minimal, no gloss or shine. Feels like a luxury fashion house identity — think Bottega Veneta or Celine. Generous negative space, restrained palette, impeccable proportion.”,
+bgOverride: null,
+},
+{
+id: “embossed”,
+icon: “🔵”,
+name: “Embossed / Debossed”,
+desc: “Dimensional pressed feel”,
+color: “#6B7280”,
+prompt: “Embossed or debossed effect. Dimensional impression as if pressed into premium paper or leather. Subtle shadow and highlight to suggest physical depth. Tactile, premium, sophisticated.”,
+bgOverride: null,
+},
+{
+id: “sticker”,
+icon: “⭐”,
+name: “Sticker / Die-cut”,
+desc: “White outline, merchandise”,
+color: “#EC4899”,
+prompt: “Sticker die-cut style. Bold white outline/border around the entire mark, as if it were a printed sticker ready to be cut out. High contrast, vibrant colors, slightly cartoonish weight. Perfect for merchandise and apparel.”,
+bgOverride: null,
+},
+],
+},
+{
+label: “Digital & Modern”,
+styles: [
+{
+id: “flatvector”,
+icon: “◻”,
+name: “Flat Vector”,
+desc: “Clean, digital, scalable”,
+color: “#3B82F6”,
+prompt: “Pure clean flat vector. Perfect geometric shapes, crisp edges, no texture, no grain, no gradients. Professional digital-first aesthetic. Scalable from favicon to billboard with zero quality loss.”,
+bgOverride: null,
+},
+{
+id: “neonglow”,
+icon: “💡”,
+name: “Neon Glow”,
+desc: “Cyberpunk, gaming, electric”,
+color: “#8B5CF6”,
+prompt: “Neon glow effect. Glowing neon lines against a dark background, electric color palette (cyan, magenta, purple, green), light bloom and halo effects. Cyberpunk or gaming aesthetic, high energy.”,
+bgOverride: “dark background — black or very deep navy — essential for neon effect”,
+},
+{
+id: “glassmorphism”,
+icon: “🔮”,
+name: “Glassmorphism”,
+desc: “Crystal refractive, Apple 2026”,
+color: “#06B6D4”,
+prompt: “Glassmorphism / crystal glass style. Refractive, translucent, liquid glass material. Light dispersion and caustic reflections, holographic edge highlights, clean white background. Premium tech aesthetic — inspired by Apple Liquid Glass 2026.”,
+bgOverride: null,
+},
+{
+id: “claymorphism”,
+icon: “🫧”,
+name: “Claymorphism”,
+desc: “3D inflatable, soft, bubbly”,
+color: “#10B981”,
+prompt: “Claymorphism / 3D inflatable style. Soft, rounded, puffy 3D forms that look like inflated clay or rubber. Soft shadows, matte material, friendly and approachable. Think playful app icon energy.”,
+bgOverride: null,
+},
+{
+id: “chromeliquid”,
+icon: “⚡”,
+name: “Chrome / Liquid Metal”,
+desc: “Metallic, aggressive, bold”,
+color: “#9CA3AF”,
+prompt: “Chrome liquid metal style. Reflective metallic surface, liquid mercury or brushed steel quality, aggressive sharp forms, high specular highlights. Bold and powerful — think luxury automotive or cutting-edge tech.”,
+bgOverride: “dark or black background to maximize chrome reflections”,
+},
+],
+},
+];
+
+const RENDER_DETAIL_TOGGLES = [
+{ id: “grain”,      label: “Grain / Paper Texture”,     prompt: “Apply subtle paper grain and ink texture overlay throughout — as if printed on textured stock, not generated digitally.” },
+{ id: “offwhite”,   label: “Off-white / Cream Background”, prompt: “Use a warm off-white cream background tone (#F5F0E8 range), like aged sketchbook or premium card stock — NOT pure digital white.” },
+{ id: “roughedges”, label: “Rough Stroke Edges”,         prompt: “Stroke edges should be slightly rough, organic, and imperfect — not perfectly smooth vector curves. Natural line weight variation.” },
+{ id: “contline”,   label: “Continuous Line Construction”, prompt: “The main subject should feel constructed from a single continuous flowing line — not filled closed shapes. Line art approach.” },
+];
+
+function RenderStylePicker({ value, detailToggles, onStyleChange, onToggleChange, isMobile }) {
+return (
+<div>
+<label style={labelStyle}>
+Rendering Style
+<Tip text="How should the logo physically 'feel'? This controls the texture, finish, and production technique aesthetic injected into the prompt." />
+</label>
+
+```
+  {RENDER_CATEGORIES.map(cat => (
+    <div key={cat.label} style={{ marginBottom: "14px" }}>
+      <div style={{ fontSize: "11px", fontWeight: "600", color: C.muted, letterSpacing: "0.01em", textTransform: "none", marginBottom: "8px" }}>{cat.label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap: "8px" }}>
+        {cat.styles.map(s => {
+          const sel = value === s.id;
+          return (
+            <button key={s.id} onClick={() => onStyleChange(sel ? null : s.id)} style={{
+              padding: "10px 8px", borderRadius: "12px", cursor: "pointer",
+              textAlign: "center", transition: "all 0.15s",
+              background: sel ? `${s.color}14` : C.input,
+              border: `1.5px solid ${sel ? s.color : C.border}`,
+              boxShadow: sel ? `0 0 12px ${s.color}30` : "none",
+            }}>
+              <div style={{ fontSize: "18px", marginBottom: "3px" }}>{s.icon}</div>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: sel ? s.color : C.subtle, lineHeight: "1.2" }}>{s.name}</div>
+              <div style={{ fontSize: "9px", color: sel ? `${s.color}99` : "#4A4038", marginTop: "2px", lineHeight: "1.2" }}>{s.desc}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ))}
+
+  {/* Detail toggles */}
+  <div style={{ marginTop: "4px" }}>
+    <div style={{ fontSize: "11px", fontWeight: "600", color: C.muted, letterSpacing: "0.01em", textTransform: "none", marginBottom: "8px" }}>Detail Enhancements</div>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "6px" }}>
+      {RENDER_DETAIL_TOGGLES.map(t => {
+        const on = detailToggles.includes(t.id);
+        return (
+          <button key={t.id} onClick={() => onToggleChange(on ? detailToggles.filter(x => x !== t.id) : [...detailToggles, t.id])} style={{
+            display: "flex", alignItems: "center", gap: "8px",
+            padding: "9px 12px", borderRadius: "8px", cursor: "pointer",
+            textAlign: "left", transition: "all 0.15s",
+            background: on ? "rgba(255,107,53,0.08)" : C.input,
+            border: `1px solid ${on ? "rgba(255,107,53,0.4)" : C.border}`,
+          }}>
+            <div style={{
+              width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0,
+              background: on ? C.accent : C.input,
+              border: on ? "none" : "1.5px solid #3A3028",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {on && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3 5.5L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </div>
+            <span style={{ fontSize: "11px", fontWeight: "600", color: on ? C.text : C.subtle, lineHeight: "1.3" }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+</div>
+```
+
+);
+}
+
+// ─── COLOR PALETTE EXTRACTOR ──────────────────────────────────────────────────
+function getLuminance(r, g, b) {
+return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+function rgbToHex(r, g, b) {
+return “#” + [r, g, b].map(v => v.toString(16).padStart(2, “0”)).join(””).toUpperCase();
+}
+function colorDistance(c1, c2) {
+return Math.sqrt((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2);
+}
+
+function extractDominantColors(canvas, count = 8, filterExtremes = true) {
+const ctx = canvas.getContext(“2d”);
+const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+const samples = [];
+for (let i = 0; i < data.length; i += 16) {
+const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+if (a < 128) continue;
+if (filterExtremes) {
+const lum = getLuminance(r, g, b);
+if (lum > 235 || lum < 20) continue;
+}
+samples.push([r, g, b]);
+}
+if (samples.length === 0) return [];
+
+let centers = [samples[Math.floor(Math.random() * samples.length)]];
+for (let k = 1; k < count; k++) {
+let maxDist = 0, best = samples[0];
+for (const s of samples) {
+const minD = Math.min(…centers.map(c => colorDistance(s, c)));
+if (minD > maxDist) { maxDist = minD; best = s; }
+}
+centers.push(best);
+}
+for (let iter = 0; iter < 10; iter++) {
+const clusters = centers.map(() => []);
+for (const s of samples) {
+let minD = Infinity, idx = 0;
+centers.forEach((c, i) => { const d = colorDistance(s, c); if (d < minD) { minD = d; idx = i; } });
+clusters[idx].push(s);
+}
+centers = clusters.map((cl, i) => {
+if (!cl.length) return centers[i];
+const avg = cl.reduce((a, c) => [a[0]+c[0], a[1]+c[1], a[2]+c[2]], [0,0,0]);
+return avg.map(v => Math.round(v / cl.length));
+});
+}
+return centers
+.filter((c, i, arr) => arr.findIndex(o => colorDistance(c, o) < 28) === i)
+.sort((a, b) => getLuminance(…a) - getLuminance(…b))
+.map(([r, g, b]) => ({ hex: rgbToHex(r, g, b), lum: getLuminance(r, g, b) }));
+}
+
+function ColorPaletteExtractor({ selectedColors, onColorsChange, isMobile }) {
+const [imgSrc,  setImgSrc]  = useState(null);
+const [canvas,  setCanvas]  = useState(null); // store rendered canvas
+const [colors,  setColors]  = useState([]);
+const [filter,  setFilter]  = useState(true);
+const [loading, setLoading] = useState(false);
+const [ready,   setReady]   = useState(false); // image loaded into canvas
+const [error,   setError]   = useState(””);
+const fileRef = React.useRef(null);
+
+const handleFile = (file) => {
+if (!file || !file.type.startsWith(“image/”)) { setError(“Please upload an image file.”); return; }
+setError(””); setColors([]); setReady(false); onColorsChange([]);
+const reader = new FileReader();
+reader.onload = e => setImgSrc(e.target.result);
+reader.readAsDataURL(file);
+};
+
+// When imgSrc changes, draw onto an offscreen canvas
+useEffect(() => {
+if (!imgSrc) return;
+const img = new Image();
+img.onload = () => {
+const c = document.createElement(“canvas”);
+c.width = 150; c.height = 150;
+c.getContext(“2d”).drawImage(img, 0, 0, 150, 150);
+setCanvas(c);
+setReady(true);
+};
+img.onerror = () => setError(“Could not load image.”);
+img.src = imgSrc; // data URL — no CORS issue
+}, [imgSrc]);
+
+const handleExtract = () => {
+if (!canvas || !ready) return;
+setLoading(true);
+setTimeout(() => {
+try {
+const extracted = extractDominantColors(canvas, 10, filter);
+setColors(extracted);
+if (extracted.length === 0) setError(“No colors found. Try turning off the filter.”);
+else setError(””);
+} catch(e) {
+setError(“Extract failed: “ + e.message);
+}
+setLoading(false);
+}, 30);
+};
+
+// Re-extract when filter toggles and we already have a canvas
+const toggleFilter = () => {
+setFilter(f => {
+const next = !f;
+if (canvas && ready) {
+setTimeout(() => {
+try {
+const extracted = extractDominantColors(canvas, 10, next);
+setColors(extracted);
+} catch(e) {}
+}, 30);
+}
+return next;
+});
+};
+
+const toggleColor = (hex) => {
+onColorsChange(selectedColors.includes(hex) ? selectedColors.filter(c => c !== hex) : […selectedColors, hex]);
+};
+
+return (
+<div>
+<label style={labelStyle}>
+Color Palette
+<span style={{ color: C.muted, fontWeight: “400”, textTransform: “none”, letterSpacing: 0, marginLeft: “6px” }}>— upload an image to extract colors</span>
+</label>
+
+```
+  {/* Drop zone */}
+  <div
+    onClick={() => fileRef.current?.click()}
+    onDragOver={e => e.preventDefault()}
+    onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
+    style={{
+      border: `1.5px dashed ${imgSrc ? C.p4 : C.border}`,
+      borderRadius: "10px", padding: "16px",
+      textAlign: "center", cursor: "pointer",
+      background: imgSrc ? "rgba(34,197,94,0.04)" : C.input,
+      transition: "all 0.2s", marginBottom: "10px",
+    }}
+  >
+    {imgSrc ? (
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+        <img src={imgSrc} alt="palette ref" style={{ height: "56px", borderRadius: "6px", objectFit: "cover" }} />
+        <div style={{ textAlign: "left" }}>
+          <div style={{ fontSize: "12px", fontWeight: "600", color: ready ? C.p4 : "#F59E0B" }}>
+            {ready ? "Image loaded ✓" : "Loading…"}
+          </div>
+          <div style={{ fontSize: "11px", color: C.muted }}>Tap to replace</div>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div style={{ fontSize: "24px", marginBottom: "6px" }}>🎨</div>
+        <div style={{ fontSize: "13px", fontWeight: "600", color: C.subtle }}>Tap to upload color reference</div>
+        <div style={{ fontSize: "11px", color: C.muted, marginTop: "3px" }}>Brand guideline, product photo, mood board, anything</div>
+      </>
+    )}
+  </div>
+  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+    onChange={e => handleFile(e.target.files[0])} />
+
+  {imgSrc && (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+        <button
+          onClick={handleExtract}
+          disabled={loading || !ready}
+          style={{
+            padding: "10px 20px", borderRadius: "9px", cursor: ready ? "pointer" : "not-allowed",
+            border: "none", fontWeight: "700", fontSize: "13px",
+            background: !ready ? C.border : loading ? "#6B4070" : "linear-gradient(135deg,#EC4899,#A855F7)",
+            color: !ready ? C.muted : "#fff", transition: "all 0.2s",
+            opacity: ready ? 1 : 0.6,
+          }}
+        >
+          {loading ? "Extracting…" : !ready ? "Loading image…" : "⚡ Extract Colors"}
+        </button>
+
+        <div onClick={toggleFilter} style={{
+          display: "flex", alignItems: "center", gap: "6px",
+          cursor: "pointer", padding: "8px 12px", borderRadius: "8px",
+          background: filter ? "rgba(236,72,153,0.08)" : C.input,
+          border: `1px solid ${filter ? "#EC4899" : C.border}`,
+          userSelect: "none",
+        }}>
+          <div style={{
+            width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0,
+            background: filter ? "#EC4899" : C.input,
+            border: filter ? "none" : "1.5px solid #3A3028",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            {filter && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3 5.5L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </div>
+          <span style={{ fontSize: "11px", fontWeight: "600", color: filter ? "#EC4899" : C.muted }}>Filter white & black</span>
+        </div>
+      </div>
+
+      {error && <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#FF6B6B" }}>⚠ {error}</p>}
+
+      {colors.length > 0 && (
+        <div>
+          <div style={{ fontSize: "11px", color: C.muted, marginBottom: "8px" }}>
+            Tap to select colors for your prompt — {selectedColors.length} selected:
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+            {colors.map(({ hex }) => {
+              const sel = selectedColors.includes(hex);
+              return (
+                <button key={hex} onClick={() => toggleColor(hex)} style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+                  padding: "5px", borderRadius: "9px", cursor: "pointer",
+                  background: "transparent", border: "none",
+                  outline: sel ? "2px solid #EC4899" : "2px solid transparent",
+                  outlineOffset: "1px", transition: "all 0.15s",
+                }}>
+                  <div style={{
+                    width: isMobile ? "42px" : "46px",
+                    height: isMobile ? "42px" : "46px",
+                    borderRadius: "7px", background: hex,
+                    boxShadow: sel ? `0 0 14px ${hex}AA` : "0 1px 4px rgba(0,0,0,0.5)",
+                    transform: sel ? "scale(1.1)" : "scale(1)",
+                    transition: "all 0.15s",
+                  }} />
+                  <span style={{ fontSize: "9px", fontFamily: "'DM Sans', sans-serif", color: sel ? "#fff" : C.muted }}>{hex}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedColors.length > 0 && (
+            <div style={{ padding: "10px 12px", borderRadius: "10px", background: "rgba(236,72,153,0.08)", border: "1px solid rgba(236,72,153,0.25)" }}>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: "#EC4899", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px" }}>✓ Injected into prompt</div>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {selectedColors.map(hex => (
+                  <div key={hex} style={{ display: "flex", alignItems: "center", gap: "5px", background: C.cardAlt, padding: "4px 10px 4px 6px", borderRadius: "20px", border: `1px solid ${C.border}` }}>
+                    <div style={{ width: "12px", height: "12px", borderRadius: "3px", background: hex, flexShrink: 0 }} />
+                    <span style={{ fontSize: "11px", fontFamily: "'DM Sans', sans-serif", color: C.text }}>{hex}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  )}
+</div>
+```
+
+);
+}
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const STORAGE_KEY = “lpa_state_v1”;
+const STORAGE_TS_KEY = “lpa_state_ts_v1”;
+const EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+const EMPTY_STATE = {
+brand: { name: “”, industry: “”, brief: “” },
+values: [],
+fidelity: 2,
+hasRef: true,
+userDirection: “”,
+dna: { preserveExactly: “”, replaceOnly: “”, elementSwap: “”, stroke: “”, contour: “”, character: “”, composition: “”, density: “”, mood: “”, illustrationLanguage: “”, carryOver: “”, change: “”, directionTranslation: “” },
+logoType: “”, iconConcept: “”, useCases: [], selectedColors: [],
+renderStyle: null, renderToggles: [],
+platform: “chatgpt”, whiteBg: true, flatLayout: true,
+};
+
+// ─── TOOLTIP COMPONENT ────────────────────────────────────────────────────────
+function Tip({ text }) {
+const [show, setShow] = useState(false);
+return (
+<span style={{ position: “relative”, display: “inline-block”, marginLeft: “5px” }}>
+<span
+onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}
+onClick={() => setShow(v => !v)}
+style={{
+cursor: “pointer”, color: C.muted, fontSize: “11px”, fontWeight: “600”,
+background: C.border, border: `1px solid ${C.border}`,
+borderRadius: “50%”, width: “16px”, height: “16px”,
+display: “inline-flex”, alignItems: “center”, justifyContent: “center”,
+userSelect: “none”, verticalAlign: “middle”,
+}}>ℹ</span>
+{show && (
+<div style={{
+position: “absolute”, bottom: “calc(100% + 6px)”, left: “50%”,
+transform: “translateX(-50%)”, zIndex: 999,
+background: “#2A2A2E”, border: `1px solid ${C.border}`,
+borderRadius: “10px”, padding: “10px 14px”,
+fontSize: “12px”, color: C.text, lineHeight: “1.5”,
+width: “220px”, boxShadow: “0 8px 24px rgba(0,0,0,0.15)”,
+pointerEvents: “none”,
+}}>{text}</div>
+)}
+</span>
+);
+}
+
+// ─── ONBOARDING SCREEN ────────────────────────────────────────────────────────
+function OnboardingScreen({ onDone }) {
+return (
+<div style={{
+position: “fixed”, inset: 0, background: “rgba(15,15,16,0.96)”,
+backdropFilter: “blur(20px)”, WebkitBackdropFilter: “blur(20px)”,
+zIndex: 1000, display: “flex”, alignItems: “center”, justifyContent: “center”,
+padding: “24px”,
+}}>
+<div style={{
+maxWidth: “460px”, width: “100%”,
+background: C.card, border: `1px solid ${C.border}`,
+borderRadius: “24px”, padding: “40px 36px”,
+boxShadow: “0 32px 80px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3)”,
+}}>
+<div style={{ display: “flex”, alignItems: “center”, gap: “14px”, marginBottom: “32px” }}>
+<div style={{ width: “44px”, height: “44px”, borderRadius: “12px”, background: “linear-gradient(135deg,#FF6B35,#FF3CAC)”, display: “flex”, alignItems: “center”, justifyContent: “center”, flexShrink: 0 }}>
+<svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M7 1L9 5H13L10 8L11 12L7 10L3 12L4 8L1 5H5L7 1Z" fill="white"/></svg>
+</div>
+<div>
+<h1 style={{ margin: 0,  fontWeight: “800”, fontSize: “22px”, color: C.text, letterSpacing: “-0.03em” }}>
+Logo Prompt Architect
+</h1>
+<p style={{ margin: “3px 0 0”, fontSize: “13px”, color: C.muted }}>AI logo prompt builder · 2026</p>
+</div>
+</div>
+
+```
+    <p style={{ margin: "0 0 28px", fontSize: "15px", color: C.subtle, lineHeight: "1.7" }}>
+      Build professional prompts to generate logos using AI — no design experience needed.
+    </p>
+
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
+      {[
+        { n: "1", color: C.p1,  title: "Tell us about your brand", desc: "Industry, values, and a short description of your business." },
+        { n: "2", color: C.p2,  title: "Analyze your reference", desc: "Have a logo you like? AI extracts its visual style — you control how closely to follow it." },
+        { n: "3", color: C.p3,  title: "Copy prompt → paste to AI", desc: "Open ChatGPT, Claude, or Gemini. Attach your reference. Paste the prompt. Done." },
+      ].map(s => (
+        <div key={s.n} style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+          <div style={{ width: "30px", height: "30px", borderRadius: "10px", background: `${s.color}15`, border: `1.5px solid ${s.color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: s.color, flexShrink: 0 }}>{s.n}</div>
+          <div style={{ paddingTop: "4px" }}>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: C.text, marginBottom: "3px" }}>{s.title}</div>
+            <div style={{ fontSize: "13px", color: C.muted, lineHeight: "1.5" }}>{s.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <button onClick={onDone} style={{
+      width: "100%", padding: "15px", borderRadius: "14px", cursor: "pointer",
+      border: "none", fontWeight: "600", fontSize: "16px",
+      background: C.accent, color: "#fff",
+      fontFamily: "inherit", letterSpacing: "-0.01em",
+      transition: "opacity 0.15s",
+    }}>
+      Get Started
+    </button>
+  </div>
+</div>
+```
+
+);
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+const isMobile = useIsMobile();
+
+// ── localStorage load ──
+const loadSaved = () => {
+try {
+const ts = localStorage.getItem(STORAGE_TS_KEY);
+if (ts && Date.now() - Number(ts) > EXPIRE_MS) {
+localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_TS_KEY); return null;
+}
+const raw = localStorage.getItem(STORAGE_KEY);
+return raw ? JSON.parse(raw) : null;
+} catch { return null; }
+};
+
+const saved = loadSaved();
+const [state, setState] = useState(saved || EMPTY_STATE);
+const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem(“lpa_seen_v1”));
+const [showResetConfirm, setShowResetConfirm] = useState(false);
+const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+// ── Auto-save to localStorage ──
+useEffect(() => {
+try {
+localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
+} catch {}
+}, [state]);
+
+const handleOnboardingDone = () => {
+localStorage.setItem(“lpa_seen_v1”, “1”);
+setShowOnboarding(false);
+};
+
+const handleReset = () => {
+setState(EMPTY_STATE);
+setDnaRaw(””); setDnaOk(false); setDnaError(””);
+setShowResetConfirm(false);
+try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_TS_KEY); } catch {}
+};
+
+const handleClearStorage = () => {
+try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_TS_KEY); localStorage.removeItem(“lpa_seen_v1”); } catch {}
+setShowClearConfirm(false);
+};
+
+const [dnaRaw,   setDnaRaw]   = useState(””);
+const [dnaError, setDnaError] = useState(””);
+const [dnaOk,    setDnaOk]    = useState(false);
+
+const set = useCallback((path, val) => {
+setState(s => {
+const keys = path.split(”.”);
+if (keys.length === 1) return { …s, [path]: val };
+return { …s, [keys[0]]: { …s[keys[0]], [keys[1]]: val } };
+});
+}, []);
+
+const prevFidelityRef = React.useRef(state.fidelity);
+useEffect(() => {
+const wasClose = prevFidelityRef.current <= 2;
+const nowClose = state.fidelity <= 2;
+if (wasClose !== nowClose) {
+setDnaRaw(””); setDnaOk(false); setDnaError(””);
+setState(s => ({ …s, dna: { preserveExactly: “”, replaceOnly: “”, elementSwap: “”, stroke: “”, contour: “”, character: “”, composition: “”, density: “”, mood: “”, illustrationLanguage: “”, carryOver: “”, change: “”, directionTranslation: “” } }));
+}
+prevFidelityRef.current = state.fidelity;
+}, [state.fidelity]);
+
+const parseDNA = useCallback(() => {
+const raw = dnaRaw.trim();
+if (!raw) { setDnaError(“Paste the AI’s response first.”); return; }
+const isClose = state.fidelity <= 2;
+const keyMap = isClose
+? { STROKE: “stroke”, CONTOUR: “contour”, COMPOSITION: “composition”, DENSITY: “density”, ILLUSTRATION_LANGUAGE: “illustrationLanguage”, MOOD: “mood”, PRESERVE_EXACTLY: “preserveExactly”, REPLACE_ONLY: “replaceOnly”, ELEMENT_SWAP: “elementSwap”, DIRECTION_TRANSLATION: “directionTranslation” }
+: { STROKE: “stroke”, CONTOUR: “contour”, COMPOSITION: “composition”, MOOD: “mood”, ILLUSTRATION_LANGUAGE: “illustrationLanguage”, CARRY_OVER: “carryOver”, CHANGE: “change”, DIRECTION_TRANSLATION: “directionTranslation” };
+
+```
+const parsed = {}; let found = 0;
+for (const [kw, field] of Object.entries(keyMap)) {
+  const m = raw.match(new RegExp(`^${kw}:\\s*(.+)$`, "mi"));
+  if (m) { parsed[field] = m[1].trim(); found++; }
+}
+const iconM = raw.match(/^ICON_SUGGESTION:\s*(.+)$/mi);
+if (iconM && !state.iconConcept) setState(s => ({ ...s, iconConcept: iconM[1].trim() }));
+if (found < 3) { setDnaError("Could not parse enough fields. Copy the full AI response in the correct format."); return; }
+setState(s => ({ ...s, dna: { ...s.dna, ...parsed } }));
+setDnaOk(true); setDnaError("");
+```
+
+}, [dnaRaw, state.fidelity, state.iconConcept]);
+
+const analyzerPrompt = buildAnalyzerPrompt(state.brand, state.userDirection, state.fidelity);
+const logoPrompt     = buildLogoPrompt(state);
+const meaning        = buildMeaning(state);
+
+const step1Done = !!state.brand.industry && state.values.length > 0;
+const step2Done = dnaOk || !state.hasRef;
+const step3Done = !!state.logoType;
+const allDone   = step1Done && step3Done;
+
+const px = isMobile ? “14px” : “24px”;
+const activePlatform = PLATFORMS.find(p => p.id === state.platform);
+const fidelityColor  = getFidelityColor(state.fidelity);
+const isClose        = state.fidelity <= 2;
+const dnaFieldsToShow = isClose ? DNA_FIELDS_CLOSE : DNA_FIELDS_FREE;
+
+const css = `@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,300..700&display=swap'); * { box-sizing: border-box; font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; } body { margin: 0; background: ${C.bg}; -webkit-font-smoothing: antialiased; } select option { background: #fff; color: ${C.text}; } ::placeholder { color: #4A4A52; } ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #3A3A3E; border-radius: 3px; } textarea, input, select { -webkit-text-size-adjust: 100%; } input[type=range] { -webkit-appearance: none; } input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: ${fidelityColor}; cursor: pointer; border: 2.5px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s; } input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: ${fidelityColor}; cursor: pointer; border: 2.5px solid #fff; } button:hover { opacity: 0.88; }`;
+
+return (
+<>
+<style>{css}</style>
+<div style={{ minHeight: “100vh”, background: C.bg, color: C.text }}>
+
+```
+  {showOnboarding && <OnboardingScreen onDone={handleOnboardingDone} />}
+
+  {/* Reset confirm */}
+  {showResetConfirm && (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px", maxWidth: "340px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+        <div style={{ fontSize: "15px", fontWeight: "700", color: C.text, marginBottom: "8px" }}>Reset everything?</div>
+        <div style={{ fontSize: "13px", color: C.muted, marginBottom: "20px", lineHeight: "1.5" }}>All fields will be cleared. This cannot be undone.</div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", background: C.input, border: `1px solid ${C.inputBorder}`, color: C.subtle, fontWeight: "600", fontSize: "14px", fontFamily: "inherit" }}>Cancel</button>
+          <button onClick={handleReset} style={{ flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", background: "#EF4444", border: "none", color: "#fff", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>Reset</button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Clear storage confirm */}
+  {showClearConfirm && (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "20px", padding: "28px", maxWidth: "340px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+        <div style={{ fontSize: "15px", fontWeight: "700", color: C.text, marginBottom: "8px" }}>Clear saved data?</div>
+        <div style={{ fontSize: "13px", color: C.muted, marginBottom: "20px", lineHeight: "1.5" }}>Removes all saved data from this browser including the onboarding screen. Your current session stays until you refresh.</div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => setShowClearConfirm(false)} style={{ flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", background: C.input, border: `1px solid ${C.inputBorder}`, color: C.subtle, fontWeight: "600", fontSize: "14px", fontFamily: "inherit" }}>Cancel</button>
+          <button onClick={handleClearStorage} style={{ flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", background: "#EF4444", border: "none", color: "#fff", fontWeight: "700", fontSize: "13px", fontFamily: "inherit" }}>Clear</button>
+        </div>
+      </div>
+    </div>
+  )}
+
+    {/* ── HEADER ── */}
+    <div style={{ background: "rgba(15,15,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderBottom: `1px solid ${C.border}`, padding: isMobile ? "12px 16px" : "16px 32px", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ maxWidth: "860px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "linear-gradient(135deg,#FF6B35,#FF3CAC)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1L9 5H13L10 8L11 12L7 10L3 12L4 8L1 5H5L7 1Z" fill="white"/></svg>
+          </div>
+          <div>
+            <h1 style={{ margin: 0,  fontWeight: "800", fontSize: isMobile ? "14px" : "17px", lineHeight: 1, color: C.text, fontWeight: "800", letterSpacing: "-0.03em" }}>Logo Prompt Architect</h1>
+            {!isMobile && <p style={{ margin: "2px 0 0", fontSize: "12px", color: C.muted }}>AI Logo Prompt Builder</p>}
+          </div>
+        </div>
+        {/* Step dots + actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Step dots */}
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            {[
+              { label: "Brand", done: step1Done, color: C.p1 },
+              { label: "DNA",   done: step2Done, color: fidelityColor },
+              { label: "Logo",  done: step3Done, color: C.p3 },
+            ].map((s, i) => (
+              <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                {i > 0 && <div style={{ width: "10px", height: "1px", background: C.border }} />}
+                <div style={{ width: "22px", height: "22px", borderRadius: "50%", background: s.done ? C.p4 : s.color + "33", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "800", color: s.done ? "#fff" : s.color, border: `1.5px solid ${s.done ? C.p4 : s.color}`, transition: "all 0.3s" }}>
+                  {s.done ? "✓" : i + 1}
+                </div>
+                {!isMobile && <span style={{ fontSize: "10px", color: s.done ? C.p4 : C.muted, fontWeight: "600" }}>{s.label}</span>}
+              </div>
+            ))}
+          </div>
+          {/* Reset button */}
+          <button onClick={() => setShowResetConfirm(true)} title="Reset all fields" style={{
+            padding: "6px 10px", borderRadius: "7px", cursor: "pointer",
+            background: "transparent", border: `1px solid ${C.border}`,
+            color: C.muted, fontSize: "11px", fontWeight: "600",
+            display: "flex", alignItems: "center", gap: "4px",
+            transition: "all 0.15s", fontFamily: "inherit",
+          }}>
+            ↺ {!isMobile && "Reset"}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style={{ maxWidth: "860px", margin: "0 auto", padding: `28px ${px} 60px` }}>
+
+      {/* ══════════════════ STEP 1 — BRAND ══════════════════ */}
+      <div style={{ marginBottom: "14px" }}>
+        <Card accent={C.p1}>
+          <StepHeader number="1" color={C.p1} title="Brand Info" subtitle="Who is this brand?" done={step1Done} />
+
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+            <div>
+              <label style={labelStyle}>Brand Name <span style={{ color: C.muted, fontWeight: "400", textTransform: "none", letterSpacing: 0 }}>(optional)</span><Tip text="The name of your brand. Leave blank if you haven't decided yet — it won't affect the logo style." /></label>
+              <TextInput placeholder='"Luminary", "Kira", "Apex"' value={state.brand.name} onChange={v => set("brand.name", v)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Industry / Niche</label>
+              <SelectField value={state.brand.industry} options={INDUSTRIES} onChange={v => set("brand.industry", v)} placeholder="Select industry…" />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>Describe Your Business <span style={{ color: C.muted, fontWeight: "400", textTransform: "none", letterSpacing: 0 }}>— 1–2 sentences, any language</span><Tip text="The more specific you are, the better the AI understands your brand. E.g. target audience, product type, brand personality." /></label>
+            <TextInput multiline rows={2}
+              placeholder='"Kami platform komunitas untuk orang-orang yang ingin terhubung lewat pengalaman sehari-hari" or "A slow living brand helping urban people reconnect with simple joys"'
+              value={state.brand.brief} onChange={v => set("brand.brief", v)} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Brand Values <span style={{ color: C.muted, fontWeight: "400", textTransform: "none", letterSpacing: 0 }}>— pick up to 4</span></label>
+            <ValueChips selected={state.values} onChange={v => set("values", v)} />
+            {state.values.length === 0 && <p style={{ margin: "7px 0 0", fontSize: "11px", color: C.muted }}>Pick at least 1 to unlock the next step.</p>}
+          </div>
+        </Card>
+      </div>
+
+      {/* ══════════════════ STEP 2 — DNA ══════════════════ */}
+      <div style={{ marginBottom: "14px", opacity: step1Done ? 1 : 0.35, pointerEvents: step1Done ? "auto" : "none", transition: "opacity 0.3s" }}>
+        <Card accent={fidelityColor}>
+          <StepHeader number="2" color={fidelityColor} title="Reference DNA Extraction" subtitle="Let AI analyze your reference — you control how closely to follow it" done={step2Done} />
+
+          {/* Fidelity Slider */}
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>How closely should AI follow the reference?<Tip text="'Very Close' means AI keeps almost everything and only swaps the subject. 'Freely Inspired' means AI uses the reference only as a mood/style cue and creates something more original." /></label>
+            <FidelitySlider value={state.fidelity} onChange={v => set("fidelity", v)} />
+          </div>
+
+          <Checkbox checked={state.hasRef} onChange={v => set("hasRef", v)}
+            label="I have a reference / inspiration image"
+            sublabel="Any logo, illustration, mood board, or brand guideline screenshot" />
+
+          {state.hasRef && (
+            <>
+              {/* User Direction */}
+              <div style={{ marginTop: "14px" }}>
+                <label style={labelStyle}>
+                  Your Personal Direction
+                  <span style={{ color: fidelityColor, marginLeft: "6px", fontWeight: "400", textTransform: "none", letterSpacing: 0 }}>— tulis bebas, bahasa apapun</span>
+                </label>
+                <TextInput multiline rows={4}
+                  placeholder={isClose
+                    ? "Ceritakan apa yang mau kamu pertahankan dan apa yang mau diganti.\n\nContoh:\n\"Saya suka banget gaya gambar tangannya — garis tebal, organik, karakter sederhana. Saya mau pertahankan semua itu. Yang mau saya ganti hanya subjeknya: dari karakter abstrak/hewan jadi figur manusia sederhana yang sedang melayang santai. Elemen kecil di sekitarnya bisa jadi bintang, bulan, atau bunga.\"\n\nAtau:\n\"Keep everything exactly the same visually. Just replace the creature with a drifting human figure. Everything else stays.\""
+                    : "Ceritakan apa yang kamu suka dari referensi dan mau kamu bawa ke logo baru.\n\nContoh:\n\"Saya suka energy-nya yang hangat dan indie. Mau saya bawa ke logo baru tapi dengan konsep yang berbeda — sesuatu yang relate ke bisnis saya yang bergerak di bidang komunitas.\"\n\nAtau:\n\"The hand-drawn aesthetic is perfect but I want a completely different concept — something that represents connection and belonging.\""
+                  }
+                  value={state.userDirection} onChange={v => set("userDirection", v)} />
+                <p style={{ margin: "5px 0 0", fontSize: "11px", color: C.muted }}>
+                  {isClose
+                    ? "💡 Semakin spesifik kamu tentang apa yang mau dipertahankan dan apa yang mau diganti, semakin akurat hasilnya."
+                    : "💡 Tulis bebas — AI akan translate ke bahasa desain profesional."}
+                </p>
+              </div>
+
+              <Divider label="↓ Copy analyzer prompt, open AI tools, attach image, paste & send" />
+
+              {/* Analyzer Prompt */}
+              <div style={{ padding: "16px", borderRadius: "12px", background: C.cardAlt, border: `1px solid ${fidelityColor}30` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: fidelityColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "4px" }}>
+                      📤 Analyzer Prompt — Fidelity {state.fidelity}/5
+                    </div>
+                    <p style={{ margin: 0, fontSize: "12px", color: C.muted, lineHeight: "1.5" }}>
+                      Copy → open ChatGPT / Claude / Gemini → <strong style={{ color: C.text }}>attach your reference image</strong> → paste & send
+                    </p>
+                  </div>
+                  <CopyButton text={analyzerPrompt} label="Copy Analyzer Prompt" color={fidelityColor} />
+                </div>
+                <PromptBox value={analyzerPrompt} minHeight="140px" />
+                {state.userDirection && (
+                  <div style={{ marginTop: "8px", padding: "8px 12px", borderRadius: "7px", background: `${fidelityColor}10`, border: `1px solid ${fidelityColor}30` }}>
+                    <span style={{ fontSize: "11px", color: fidelityColor }}>✓ Your personal direction is included — AI will honor it.</span>
+                  </div>
+                )}
+              </div>
+
+              <Divider label="↓ Paste AI's response here" />
+
+              {/* Paste Area */}
+              <div style={{ padding: "16px", borderRadius: "12px", background: C.cardAlt, border: `1px solid ${dnaOk ? "rgba(61,214,140,0.4)" : C.border}`, borderRadius: "12px", transition: "border-color 0.3s" }}>
+                <div style={{ fontSize: "12px", fontWeight: "700", color: C.p4, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>📥 Paste AI's Response Here</span>
+                  {dnaRaw && (
+                    <button onClick={() => { setDnaRaw(""); setDnaOk(false); setDnaError(""); }} style={{ padding: "3px 10px", borderRadius: "6px", cursor: "pointer", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#EF4444", fontSize: "11px", fontWeight: "600", fontFamily: "inherit" }}>✕ Clear</button>
+                  )}
+                </div>
+                <textarea
+                  placeholder={isClose
+                    ? "Paste the full response. Should include:\nSTROKE: ...\nCONTOUR: ...\nCOMPOSITION: ...\nPRESERVE_EXACTLY: ...\nREPLACE_ONLY: ...\nELEMENT_SWAP: ...\nICON_SUGGESTION: ..."
+                    : "Paste the full response. Should include:\nSTROKE: ...\nCOMPOSITION: ...\nMOOD: ...\nILLUSTRATION_LANGUAGE: ...\nCARRY_OVER: ...\nCHANGE: ...\nDIRECTION_TRANSLATION: ...\nICON_SUGGESTION: ..."
+                  }
+                  value={dnaRaw}
+                  onChange={e => { setDnaRaw(e.target.value); setDnaOk(false); setDnaError(""); }}
+                  rows={8}
+                  style={{
+                    width: "100%", boxSizing: "border-box", padding: "12px",
+                    background: C.input, border: `1px solid ${C.inputBorder}`,
+                    borderRadius: "8px", color: "#C8BEA8",
+                    fontSize: "12px", lineHeight: "1.7", resize: "vertical",
+                    fontFamily: "'DM Sans', sans-serif", outline: "none",
+                  }}
+                />
+                {dnaError && <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#FF6B6B" }}>⚠ {dnaError}</p>}
+                <div style={{ marginTop: "10px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button onClick={parseDNA} style={{
+                    padding: "10px 20px", borderRadius: "9px", cursor: "pointer", border: "none",
+                    fontWeight: "700", fontSize: "13px",
+                    background: "linear-gradient(135deg,#22C55E,#16A34A)", color: "#fff",
+                  }}>⚡ Apply DNA to Prompt</button>
+                  {dnaOk && <span style={{ fontSize: "12px", fontWeight: "700", color: C.p4 }}>✓ Applied!</span>}
+                </div>
+              </div>
+
+              {/* Editable DNA fields */}
+              {dnaOk && (
+                <div style={{ marginTop: "14px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: "700", color: C.p4, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "10px" }}>
+                    {isClose ? "🔒 Preservation Blueprint — Edit if Needed" : "🧬 Extracted DNA — Edit if Needed"}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                    {dnaFieldsToShow.map(f => (
+                      <div key={f.key} style={{ gridColumn: f.wide && !isMobile ? "1 / -1" : "auto" }}>
+                        <label style={{ ...labelStyle, color: f.color }}>{f.label}</label>
+                        <TextInput
+                          multiline={f.wide} rows={2}
+                          placeholder={f.placeholder}
+                          value={state.dna[f.key] || ""}
+                          onChange={v => set(`dna.${f.key}`, v)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {!state.hasRef && (
+            <div style={{ marginTop: "12px", padding: "12px 14px", borderRadius: "8px", background: "rgba(255,107,53,0.06)", border: "1px solid rgba(255,107,53,0.15)" }}>
+              <p style={{ margin: 0, fontSize: "12px", color: "#9A8060", lineHeight: "1.6" }}>
+                No reference — prompt will be generated from brand info and logo settings only. For best results, even a rough inspiration image helps significantly.
+              </p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ══════════════════ STEP 3 — LOGO SETTINGS ══════════════════ */}
+      <div style={{ marginBottom: "14px", opacity: (step1Done && (step2Done || !state.hasRef)) ? 1 : 0.35, pointerEvents: (step1Done && (step2Done || !state.hasRef)) ? "auto" : "none", transition: "opacity 0.3s" }}>
+        <Card accent={C.p3}>
+          <StepHeader number="3" color={C.p3} title="Logo Settings" subtitle="Define the final output" done={step3Done} />
+
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>Logo Type</label>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "6px" }}>
+              {LOGO_TYPES.map(lt => {
+                const sel = state.logoType === lt.value;
+                return (
+                  <button key={lt.value} onClick={() => set("logoType", lt.value)} style={{
+                    padding: "10px 8px", borderRadius: "9px", cursor: "pointer",
+                    textAlign: "center", transition: "all 0.15s",
+                    background: sel ? "rgba(76,142,247,0.12)" : C.input,
+                    border: `1px solid ${sel ? C.p1 : C.inputBorder}`,
+                  }}>
+                    <div style={{ fontSize: "18px", marginBottom: "4px" }}>{lt.icon}</div>
+                    <div style={{ fontSize: "10px", fontWeight: "700", color: sel ? C.accent : C.subtle, lineHeight: "1.2" }}>{lt.value}</div>
+                    <div style={{ fontSize: "9px", color: sel ? "#FF9E6B" : "#4A4038", marginTop: "2px" }}>{lt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>
+              Icon Concept / Visual Idea
+              {dnaOk && <span style={{ color: fidelityColor, marginLeft: "6px", fontWeight: "400", textTransform: "none", letterSpacing: 0 }}>— see ICON_SUGGESTION from AI above</span>}
+            </label>
+            <TextInput multiline rows={3}
+              placeholder={"What should the logo visually depict?\n\nExamples:\n• \"A simple human figure gently floating/drifting, holding a flower, surrounded by small stars and a moon\"\n• \"A lightning bolt hidden inside the letter A using negative space\"\n• \"Three hands forming a circle, fingers becoming leaves\""}
+              value={state.iconConcept} onChange={v => set("iconConcept", v)} />
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <RenderStylePicker
+              value={state.renderStyle}
+              detailToggles={state.renderToggles || []}
+              onStyleChange={v => set("renderStyle", v)}
+              onToggleChange={v => set("renderToggles", v)}
+              isMobile={isMobile}
+            />
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <ColorPaletteExtractor
+              selectedColors={state.selectedColors}
+              onColorsChange={v => set("selectedColors", v)}
+              isMobile={isMobile}
+            />
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>Use Cases</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {USE_CASES.map(uc => {
+                const sel = state.useCases.includes(uc);
+                return (
+                  <button key={uc} onClick={() => set("useCases", sel ? state.useCases.filter(x => x !== uc) : [...state.useCases, uc])}
+                    style={{
+                      padding: "7px 12px", borderRadius: "20px", cursor: "pointer",
+                      fontSize: "12px", fontWeight: "600", transition: "all 0.15s",
+                      background: sel ? C.accent : C.input,
+                      border: `1px solid ${sel ? C.accent : C.inputBorder}`,
+                      color: sel ? "#fff" : C.subtle,
+                    }}>{uc}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+            <Checkbox checked={state.whiteBg} onChange={v => set("whiteBg", v)} label="⬜ White background" sublabel="Clean #FFFFFF for easy cutout" />
+            <Checkbox checked={state.flatLayout} onChange={v => set("flatLayout", v)} label="📐 2D flat, centered" sublabel="No 3D, no perspective, no mockups" />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Target AI Platform</label>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "6px" }}>
+              {PLATFORMS.map(p => {
+                const sel = state.platform === p.id;
+                return (
+                  <button key={p.id} onClick={() => set("platform", p.id)} style={{
+                    padding: "10px 8px", borderRadius: "9px", cursor: "pointer",
+                    textAlign: "center", transition: "all 0.15s",
+                    background: sel ? `${p.color}12` : C.input,
+                    border: `1.5px solid ${sel ? p.color : C.inputBorder}`,
+                  }}>
+                    <div style={{ fontSize: "16px", marginBottom: "3px" }}>{p.icon}</div>
+                    <div style={{ fontSize: "11px", fontWeight: "700", color: sel ? p.color : C.subtle }}>{p.name}</div>
+                    <div style={{ fontSize: "9px", color: sel ? `${p.color}99` : "#4A4038", marginTop: "1px" }}>{p.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ══════════════════ OUTPUT ══════════════════ */}
+      <div style={{ opacity: allDone ? 1 : 0.3, pointerEvents: allDone ? "auto" : "none", transition: "opacity 0.3s" }}>
+        <Card accent={C.p4} style={{ background: C.cardAlt }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: C.p4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", color: "#fff", flexShrink: 0 }}>✦</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: C.text }}>Logo Generation Prompt</h2>
+              <p style={{ margin: "2px 0 0", fontSize: "11px", color: C.muted }}>
+                Open {activePlatform?.name} →{state.hasRef ? <> <strong style={{ color: C.text }}>attach reference image</strong> →</> : ""} paste → generate
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
+              <div style={{ padding: "3px 10px", borderRadius: "20px", background: `${fidelityColor}18`, border: `1px solid ${fidelityColor}44`, fontSize: "11px", fontWeight: "700", color: fidelityColor }}>
+                {FIDELITY_LABELS[state.fidelity - 1].short}
+              </div>
+              <CopyButton text={logoPrompt} label="Copy Prompt" size="large" color={C.p4} />
+            </div>
+          </div>
+
+          <PromptBox value={logoPrompt} minHeight={isMobile ? "220px" : "260px"} />
+
+          {/* Meaning */}
+          {meaning.length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: C.text, marginBottom: "12px" }}>What this prompt will generate</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {meaning.map((m, i) => (
+                  <div key={i} style={{ padding: "12px 16px", borderRadius: "12px", background: C.cardAlt, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontSize: "11px", fontWeight: "700", color: m.color || C.accent, marginBottom: "4px" }}>{m.label}</div>
+                    <div style={{ fontSize: "12px", color: "#9A9080", lineHeight: "1.6" }}>{m.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: "14px", padding: "12px 14px", borderRadius: "9px", background: C.cardAlt, border: `1px solid ${C.border}`, display: "flex", gap: "10px" }}>
+            <span style={{ fontSize: "13px", flexShrink: 0 }}>🎯</span>
+            <div style={{ fontSize: "12px", color: "#5A8060", lineHeight: "1.7" }}>
+              <strong style={{ color: "#6AAA80" }}>Pro tip: </strong>
+              {isClose
+                ? "If AI drifts from the reference structure, follow up: \"You changed too much. Keep the exact same visual composition and illustration style — only replace the subject as specified.\""
+                : "Generate 3–5 variations. If result feels too similar to reference, follow up: \"Make it more original — same visual energy, completely different subject matter.\""}
+            </div>
+          </div>
+
+          {/* Next Steps */}
+          {allDone && (
+            <div style={{ marginTop: "14px", padding: "14px 16px", borderRadius: "10px", background: C.cardAlt, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: "11px", fontWeight: "700", color: C.p1, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "10px" }}>📋 Next Steps</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+                {[
+                  { n: "1", text: `Open ${activePlatform?.name || "your AI tool"} and start a new chat` },
+                  { n: "2", text: state.hasRef ? "Attach your reference image to the chat" : "No reference needed — go straight to step 3" },
+                  { n: "3", text: 'Paste the prompt above and hit send' },
+                  { n: "4", text: "If the result is not right, copy the Pro Tip above as a follow-up message" },
+                ].map(s => (
+                  <div key={s.n} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                    <div style={{ width: "20px", height: "20px", borderRadius: "6px", background: `${C.p1}15`, border: `1px solid ${C.p1}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "700", color: C.p1, flexShrink: 0 }}>{s.n}</div>
+                    <span style={{ fontSize: "12px", color: "#6A88CC", lineHeight: "1.5", paddingTop: "2px" }}>{s.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Footer — clear data */}
+      <div style={{ marginTop: "24px", paddingBottom: "8px", display: "flex", justifyContent: "center" }}>
+        <button onClick={() => setShowClearConfirm(true)} style={{
+          padding: "6px 14px", borderRadius: "7px", cursor: "pointer",
+          background: "transparent", border: `1px solid ${C.border}`,
+          color: C.muted, fontSize: "11px", fontWeight: "500",
+          fontFamily: "inherit", transition: "all 0.15s",
+        }}>🗑 Clear saved data</button>
+      </div>
+
+    </div>
+  </div>
+</>
+```
+
+);
+}
